@@ -130,83 +130,8 @@ void LaunchController::decideAccount()
 
 LaunchDecision LaunchController::decideLaunchMode()
 {
-    if (!m_accountToUse || m_wantedLaunchMode == LaunchMode::Demo) {
-        m_actualLaunchMode = LaunchMode::Demo;
-        return LaunchDecision::Continue;
-    }
-
-    const auto* accounts = APPLICATION->accounts();
-    MinecraftAccountPtr accountToCheck = nullptr;
-
-    if (m_accountToUse->accountType() != AccountType::Offline) {
-        accountToCheck = m_accountToUse->ownsMinecraft() ? m_accountToUse : nullptr;
-    } else if (const auto defaultAccount = accounts->defaultAccount(); defaultAccount && defaultAccount->ownsMinecraft()) {
-        accountToCheck = defaultAccount;
-    } else {
-        for (int i = 0; i < accounts->count(); i++) {
-            if (const auto account = accounts->at(i); account->ownsMinecraft()) {
-                accountToCheck = account;
-                break;
-            }
-        }
-    }
-
-    if (!accountToCheck) {
-        m_actualLaunchMode = LaunchMode::Demo;
-        return LaunchDecision::Continue;
-    }
-
-    auto state = accountToCheck->accountState();
-    const bool needsRefresh =
-        m_wantedLaunchMode == LaunchMode::Normal && (state == AccountState::Offline || accountToCheck->shouldRefresh());
-    if (state == AccountState::Unchecked || state == AccountState::Errored || needsRefresh) {
-        accountToCheck->refresh();
-        state = AccountState::Working;
-    }
-
-    if (state == AccountState::Working) {
-        // refresh is in progress, we need to wait for it to finish to proceed.
-        ProgressDialog progDialog(m_parentWidget);
-        progDialog.setSkipButton(true, tr("Abort"));
-
-        // TODO: this relies on tasks' synchronous signal dispatching nature
-        // TODO: meaning currentTask can't complete and become null while this code is running
-        // TODO: this code will produce a race condition when tasks become fully async
-        auto task = accountToCheck->currentTask();
-        progDialog.execWithTask(task.get());
-
-        if (task->getState() == State::AbortedByUser) {
-            return LaunchDecision::Abort;
-        }
-
-        state = accountToCheck->accountState();
-    }
-
-    QString reauthReason;
-    switch (state) {
-        case AccountState::Errored:
-            reauthReason = tr("An error occurred while refreshing '%1'").arg(accountToCheck->profileName());
-            break;
-        case AccountState::Expired:
-            reauthReason = tr("'%1' has expired and needs to be reauthenticated").arg(accountToCheck->profileName());
-            break;
-        case AccountState::Disabled:
-            reauthReason = tr("The launcher's client identification has changed");
-            break;
-        case AccountState::Gone:
-            reauthReason = tr("'%1' no longer exists on the servers").arg(accountToCheck->profileName());
-            break;
-        default:
-            m_actualLaunchMode =
-                state == AccountState::Online && m_wantedLaunchMode == LaunchMode::Normal ? LaunchMode::Normal : LaunchMode::Offline;
-            return LaunchDecision::Continue;  // All good to go
-    }
-
-    if (reauthenticateAccount(accountToCheck, reauthReason)) {
-        return LaunchDecision::Undecided;
-    }
-
-    return LaunchDecision::Abort;
+    m_actualLaunchMode = LaunchMode::Normal;
+    return LaunchDecision::Continue;
 }
 
 bool LaunchController::askPlayDemo() const
